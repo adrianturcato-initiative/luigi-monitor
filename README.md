@@ -24,7 +24,7 @@ and sends a summary Slack message when the job is finished.
 
 ### Usage
 
-With default app username:
+Basic usage (using luigi.build or luigi.run):
 ```python
 import luigi
 from luigi_monitor import monitor
@@ -32,12 +32,26 @@ from luigi_monitor import monitor
 ...
 
 if __name__ == "__main__":
-    with monitor(slack_url=<your_slack_url>, max_print=10):
+    with monitor(url=<your_webhook_url>, service='msteams', max_print=10):
+        luigi.build([WrapperTask()], workers=50, logging_conf_file='_logging.cfg')
+
+```
+
+or 
+
+```python
+import luigi
+from luigi_monitor import monitor
+
+...
+
+if __name__ == "__main__":
+    with monitor(url=<your_webhook_url>, service='msteams', max_print=10):
         luigi.run(main_task_cls=MainClass)
 
 ```
 
-With dynamic app username:
+With dynamic app username on slack:
 ```python
 import luigi
 from luigi_monitor import monitor
@@ -45,7 +59,7 @@ from luigi_monitor import monitor
 ...
 
 if __name__ == "__main__":
-    with monitor(slack_url=<your_slack_url>, max_print=10, username="FooBar Monitor"):
+    with monitor(url=<your_slack_url>, service='slack', max_print=10, username="FooBar Monitor"):
         luigi.run(main_task_cls=MainClass)
 
 ```
@@ -65,7 +79,7 @@ from luigi_monitor import monitor
 ...
 
 if __name__ == "__main__":
-    with monitor(slack_url=<your_slack_url>, events=['DEPENDENCY_MISSING', 'FAILURE']):
+    with monitor(url=<your_webhook_url>, service='msteams', events=['DEPENDENCY_MISSING', 'FAILURE']):
         luigi.run(main_task_cls=MainClass)
 ```
 
@@ -76,7 +90,8 @@ Alternatively:
 NB: if you plan to use luigi-monitor from the command line, set options using `luigi.cfg`:
 ```
 [luigi-monitor]
-slack_url=<slack_hook>
+url=<slack_hook>
+service='msteams'
 max_print=<int>
 username=<string>
 ```
@@ -84,5 +99,5 @@ username=<string>
 
 This is a work in progress. Particularly, note that:
 
-* It only sends notifications via Slack
+* It only sends notifications via Slack or MS Teams
 
