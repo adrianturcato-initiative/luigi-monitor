@@ -4,7 +4,7 @@ from luigi.mock import MockTarget
 from luigi_monitor import monitor
 import unittest
 import os
-import mock
+from unittest import mock
 import requests
 import inspect
 from collections import defaultdict

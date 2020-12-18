@@ -3,3 +3,5 @@
 /dist/
 /build/
 /*.egg-info
+/luigi_monitor_venv/
+/.idea/

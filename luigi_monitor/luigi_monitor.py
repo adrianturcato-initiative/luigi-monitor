@@ -1,9 +1,5 @@
 from __future__ import print_function
-import inspect
-import json
-import os
-import sys
-import platform
+import inspect, json, os, sys, platform, pymsteams
 from collections import defaultdict
 from contextlib import contextmanager
 
@@ -104,13 +100,31 @@ def set_handlers(events):
         luigi.Task.event_handler(handler)(function)
 
 
-def format_message(max_print, host):
+format_elements = {
+    "slack": {
+        "ex": ":x:",
+        "check_mark": ":heavy_check_mark:",
+        "line_break": "\n",
+        "suffix": "",
+        "prefix": ""
+    },
+    "msteams": {
+        "ex": "<span>&#10060;</span>",
+        "check_mark": "<span style='color:green'>&#10004;</span>",
+        "line_break": "<br>",
+        "suffix": "</pre>",
+        "prefix": "<pre>"
+    }
+}
+
+def format_message(service, max_print, host):
     job = os.path.basename(inspect.stack()[-1][1])
+    service_elements = format_elements[service]
 
     if host is None:
         host = platform.node()
     text = []
-    emoji = ":x:"
+    emoji = service_elements['ex']
     if m.has_failed_tasks() and 'FAILURE' in m.notify_events:
         text.append(add_context_to_message("failed", const_failed_message))
         text.append("\t\t\t*Failures:*")
@@ -129,14 +143,14 @@ def format_message(max_print, host):
                 text.append("\t\t\t\t" + missing)
     # if job successful add success message
     if m.is_success_only() and 'SUCCESS' in m.notify_events:
-        emoji = ":heavy_check_mark:"
+        emoji = service_elements['check_mark']
         text.append(add_context_to_message("ran successfully", const_success_message))
         text.append("\t\t\t*Following %d tasks succeeded:*" % len(m.recorded_events['SUCCESS']))
         for succeeded in m.recorded_events['SUCCESS']:
             text.append("\t\t\t\t" + succeeded)
     fulltext = [emoji + " Status report for {} at *{}*:".format(job, host)]
     fulltext.extend(text)
-    formatted_text = "\n".join(fulltext)
+    formatted_text = service_elements['prefix'] + service_elements['line_break'].join(fulltext) + service_elements['suffix']
     if formatted_text == fulltext[0]:
         return False
     return formatted_text
@@ -162,9 +176,16 @@ def add_context_to_message(result, appendix):
         return ''.join(message)
 
 
-def send_message(slack_url, max_print, username=None, host=None):
-    text = format_message(max_print, host)
-    if not slack_url and text:
+def send_message(url, service, max_print, slack_username=None, host=None):
+    text = format_message(service,max_print, host)
+    if service == 'slack':
+        send_slack_message(url,text,slack_username)
+    elif service == 'msteams':
+        send_ms_teams_message(url,text)
+
+
+def send_slack_message(url,text,username):
+    if not url and text:
         print("slack_url not provided. Message will not be sent")
         print(text)
         return False
@@ -172,35 +193,41 @@ def send_message(slack_url, max_print, username=None, host=None):
         payload = {"text": text}
         if username:
             payload['username'] = username
-        r = requests.post(slack_url, data=json.dumps(payload))
+        r = requests.post(url, data=json.dumps(payload))
         if not r.status_code == 200:
             raise Exception(r.text)
     return True
+
+
+def send_ms_teams_message(url, text):
+    error_message = pymsteams.connectorcard(url)
+    error_message.text(text)
+    error_message.send()
 
 
 m = Monitor()
 
 
 @contextmanager
-def monitor(events=['FAILURE', 'DEPENDENCY_MISSING', 'SUCCESS'], slack_url=None, max_print=5, username=None, host=None):
+def monitor(events=['FAILURE', 'DEPENDENCY_MISSING', 'SUCCESS'], url=None, service='msteams', max_print=5, slack_username=None, host=None):
     if events:
         m.notify_events = events
         set_handlers(events)
     yield m
-    send_message(slack_url, max_print, username, host)
+    send_message(url, service, max_print, slack_username, host)
 
 
 def run():
     """Command line entry point for luigi-monitor"""
     events = ['FAILURE', 'DEPENDENCY_MISSING', 'SUCCESS']
-    slack_url, max_print, username = parse_config()
+    url, service, max_print, slack_username = parse_config()
     m.notify_events = events
     set_handlers(events)
     parse_sys_args(sys.argv)
     try:
         run_luigi(sys.argv[1:])
     except SystemExit:
-        send_message(slack_url, max_print, username)
+        send_message(url, service, max_print, slack_username)
 
 
 def parse_config():
